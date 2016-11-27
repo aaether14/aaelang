@@ -1,0 +1,6 @@
+language="tiny"
+compilers="tiny1\$(exeext)"
+target_libs=""
+gtfiles="\$(srcdir)/tiny/tiny1.cc"
+lang_requires_boot_languages=c++
+build_by_default="no"
