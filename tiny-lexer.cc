@@ -1,15 +1,12 @@
 #include "tiny/tiny-lexer.h"
-
-
 #include "config.h"
 #include "coretypes.h"
 #include "input.h"
 #include "diagnostic.h"
 #include "safe-ctype.h"
-
-
 #include <cstdlib>
 #include <algorithm>
+
 
 
 namespace Tiny

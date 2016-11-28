@@ -56,6 +56,7 @@ namespace Tiny
   TINY_TOKEN_KEYWORD (FLOAT, "float")                                          \
   TINY_TOKEN_KEYWORD (FOR, "for")                                              \
   TINY_TOKEN_KEYWORD (IF, "if")                                                \
+  TINY_TOKEN_KEYWORD (IMPORT, "import")										   \
   TINY_TOKEN_KEYWORD (INT, "int")                                              \
   TINY_TOKEN_KEYWORD (NOT, "not")                                              \
   TINY_TOKEN_KEYWORD (OR, "or")                                                \

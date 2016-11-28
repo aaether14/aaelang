@@ -5,38 +5,42 @@
 #include "fold-const.h"
 #include "convert.h"
 
-// This is required by some generic routines
 
-tree
-convert (tree type, tree expr)
+
+tree convert(tree type, tree expr)
 {
-  if (type == error_mark_node
-      || expr == error_mark_node
-      || TREE_TYPE (expr) == error_mark_node)
+
+
+
+  if (type == error_mark_node || expr == error_mark_node || TREE_TYPE(expr) == error_mark_node)
     return error_mark_node;
 
-  if (type == TREE_TYPE (expr))
+
+  if (type == TREE_TYPE(expr))
     return expr;
 
-  if (TYPE_MAIN_VARIANT (type) == TYPE_MAIN_VARIANT (TREE_TYPE (expr)))
-    return fold_convert (type, expr);
+
+  if (TYPE_MAIN_VARIANT(type) == TYPE_MAIN_VARIANT(TREE_TYPE(expr)))
+    return fold_convert(type, expr);
+
 
   switch (TREE_CODE (type))
-    {
+  {
     case VOID_TYPE:
     case BOOLEAN_TYPE:
-      return fold_convert (type, expr);
+      return fold_convert(type, expr);
     case INTEGER_TYPE:
-      return fold (convert_to_integer (type, expr));
+      return fold(convert_to_integer(type, expr));
     case POINTER_TYPE:
-      return fold (convert_to_pointer (type, expr));
+      return fold(convert_to_pointer(type, expr));
     case REAL_TYPE:
-      return fold (convert_to_real (type, expr));
+      return fold(convert_to_real(type, expr));
     case COMPLEX_TYPE:
-      return fold (convert_to_complex (type, expr));
+      return fold(convert_to_complex(type, expr));
     default:
       break;
-    }
+  }
 
-  gcc_unreachable ();
+  gcc_unreachable();
+
 }

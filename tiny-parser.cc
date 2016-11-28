@@ -38,16 +38,27 @@ struct Parser
 
 
 	private:
+	/** 
+	*Panic mode recovery
+	*/
 	void skip_after_semicolon();
 	void skip_after_end();
 	void skip_after_brace();
 
 
+
+	/**
+	*Token handling 
+	*/
 	bool skip_token(TokenId);
 	const_TokenPtr expect_token(TokenId);
 	void unexpected_token(const_TokenPtr);
 
 
+
+	/**
+	*Expression handling
+	*/
 	int left_binding_power(const_TokenPtr tok);
 	Tree null_denotation(const_TokenPtr tok);
 	Tree left_denotation(const_TokenPtr tok, Tree left);
@@ -55,10 +66,6 @@ struct Parser
 	Tree coerce_binary_arithmetic(const_TokenPtr tok, Tree *left, Tree *right);
 	bool check_logical_operands(const_TokenPtr tok, Tree left, Tree right);
 
-
-	Tree get_printf_addr();
-	Tree get_puts_addr();
-	Tree get_scanf_addr();
 
 
 	Tree build_label_decl(const char *name, location_t loc);
@@ -68,8 +75,10 @@ struct Parser
 			    Tree for_body_stmt_list);
 
 
+
 	const char *print_type(Tree type);
 	TreeStmtList &get_current_stmt_list();
+
 
 
 	void enter_scope();
@@ -95,9 +104,9 @@ struct Parser
 	bool done_end_of_file();
 
 
-	typedef Tree(Parser::*BinaryHandler)(const_TokenPtr, Tree);
-	BinaryHandler get_binary_handler(TokenId id);
 
+	typedef Tree (Parser::*BinaryHandler)(const_TokenPtr, Tree);
+	BinaryHandler get_binary_handler(TokenId id);
 
 
 
@@ -149,7 +158,6 @@ struct Parser
 	Tree parse_write_statement();
 	Tree parse_expression();
 	Tree parse_expression_naming_variable();
-	Tree parse_lhs_assignment_expression();
 	Tree parse_boolean_expression();
 	Tree parse_integer_expression();
 
@@ -163,6 +171,11 @@ struct Parser
   	Tree puts_fn;
   	Tree printf_fn;
   	Tree scanf_fn;
+
+
+	Tree get_printf_addr();
+	Tree get_puts_addr();
+	Tree get_scanf_addr();
 
 
 	std::vector<TreeStmtList> stack_stmt_list;
@@ -489,6 +502,8 @@ Tree Parser::parse_variable_declaration()
 		error_at(identifier->get_locus(),
 				"name '%s' already declared in this scope",
 				identifier->get_str().c_str());
+		skip_after_semicolon();
+		return Tree::error();
 	}
 
 
@@ -526,25 +541,57 @@ Tree Parser::parse_variable_declaration()
 
 
 		if (expr.is_error())
+		{
+			skip_after_semicolon();
 			return Tree::error();
+		}
 
 
 		if (var_decl.get_type() != expr.get_type())
-		{
+			expr = Tree(convert(var_decl.get_type().get_tree(), expr.get_tree()), first_of_expr->get_locus());
 
-			error_at(first_of_expr->get_locus(),
-			"cannot assign value of type %s to a variable of type %s",
-			print_type(expr.get_type()),
-			print_type(var_decl.get_type()));
-			return Tree::error();
 
-		}
 		Tree assignment_stmt = build_tree(MODIFY_EXPR, assig_tok->get_locus(), void_type_node, var_decl, expr);
 		stmt_list.append(assignment_stmt);
 
 	}
 	skip_token(Tiny::SEMICOLON);
 	return stmt_list.get_tree();
+
+}
+
+
+
+Tree Parser::parse_assignment_statement()
+{
+
+
+	Tree variable = parse_expression_naming_variable();
+	if (variable.is_error())
+		return Tree::error();
+
+
+	const_TokenPtr assig_tok = expect_token(Tiny::ASSIG);
+	if (assig_tok == NULL)
+	{
+		skip_after_semicolon();
+		return Tree::error();
+	}
+
+
+	const_TokenPtr first_of_expr = lexer.peek_token();
+	Tree expr = parse_expression();
+	if (expr.is_error())
+		return Tree::error();
+
+
+	skip_token(Tiny::SEMICOLON);
+	if (variable.get_type() != expr.get_type())
+		expr = Tree(convert(variable.get_type().get_tree(), expr.get_tree()), first_of_expr->get_locus());
+
+
+	Tree assig_expr = build_tree(MODIFY_EXPR, assig_tok->get_locus(), void_type_node, variable, expr);
+	return assig_expr;
 
 }
 
@@ -839,8 +886,8 @@ Tree Parser::parse_type()
 	for (Dimensions::reverse_iterator it = dimensions.rbegin(); it != dimensions.rend(); it++)
 	{
 		
-		it->first = Tree(it->first.get_tree(), it->first.get_locus());
-		it->second = Tree(it->second.get_tree(), it->second.get_locus());
+		it->first = Tree(fold(it->first.get_tree()), it->first.get_locus());
+		it->second = Tree(fold(it->second.get_tree()), it->second.get_locus());
 
 		if (!type.is_error())
 		{
@@ -911,47 +958,6 @@ SymbolPtr Parser::query_integer_variable(const std::string &name, location_t loc
 		}
 	}
 	return sym;
-
-}
-
-
-
-Tree Parser::parse_assignment_statement()
-{
-
-
-	Tree variable = parse_lhs_assignment_expression();
-	if (variable.is_error())
-		return Tree::error();
-
-
-	const_TokenPtr assig_tok = expect_token(Tiny::ASSIG);
-	if (assig_tok == NULL)
-	{
-		skip_after_semicolon();
-		return Tree::error();
-	}
-
-
-	const_TokenPtr first_of_expr = lexer.peek_token();
-	Tree expr = parse_expression();
-	if (expr.is_error())
-		return Tree::error();
-
-
-	skip_token(Tiny::SEMICOLON);
-	if (variable.get_type() != expr.get_type())
-	{
-		error_at(first_of_expr->get_locus(),
-		"cannot assign value of type %s to a variable of type %s",
-		print_type(expr.get_type()),
-		print_type(variable.get_type()));
-		return Tree::error();
-	}
-
-
-	Tree assig_expr = build_tree(MODIFY_EXPR, assig_tok->get_locus(), void_type_node, variable, expr);
-	return assig_expr;
 
 }
 
@@ -1645,13 +1651,11 @@ Tree Parser::coerce_binary_arithmetic(const_TokenPtr tok, Tree *left, Tree *righ
 	{
 		if (left_type == integer_type_node)
 		{
-			*left = build_tree(FLOAT_EXPR, left->get_locus(), float_type_node,
-			      left->get_tree());
+			*left = build_tree(FLOAT_EXPR, left->get_locus(), float_type_node, left->get_tree());
 		}
 		else
 		{
-			*right = build_tree(FLOAT_EXPR, right->get_locus(),
-					float_type_node, right->get_tree());
+			*right = build_tree(FLOAT_EXPR, right->get_locus(), float_type_node, right->get_tree());
 		}
 		return float_type_node;
 	}
@@ -2053,13 +2057,6 @@ Tree Parser::parse_expression_naming_variable()
 	}
 	return expr;
 
-}
-
-
-
-Tree Parser::parse_lhs_assignment_expression()
-{
-	return parse_expression_naming_variable();
 }
 
 
