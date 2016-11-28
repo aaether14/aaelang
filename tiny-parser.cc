@@ -95,7 +95,7 @@ struct Parser
 	bool done_end_of_file();
 
 
-	typedef Tree (Parser::*BinaryHandler)(const_TokenPtr, Tree);
+	typedef Tree(Parser::*BinaryHandler)(const_TokenPtr, Tree);
 	BinaryHandler get_binary_handler(TokenId id);
 
 
@@ -157,6 +157,7 @@ struct Parser
 	private:
   	Lexer &lexer;
   	Scope scope;
+
 
   	tree main_fndecl;
   	Tree puts_fn;
@@ -468,7 +469,7 @@ Tree Parser::parse_variable_declaration()
 	}
 
 
-	if (!skip_token (Tiny::COLON))
+	if (!skip_token(Tiny::COLON))
 	{
 		skip_after_semicolon();
 		return Tree::error();
@@ -483,7 +484,6 @@ Tree Parser::parse_variable_declaration()
 	}
 
 
-	skip_token(Tiny::SEMICOLON);
 	if (scope.get_current_mapping().get(identifier->get_str()))
 	{
 		error_at(identifier->get_locus(),
@@ -496,19 +496,55 @@ Tree Parser::parse_variable_declaration()
 	scope.get_current_mapping().insert(sym);
 
 
-	Tree decl = build_decl(identifier->get_locus(), VAR_DECL,
+	Tree var_decl = build_decl(identifier->get_locus(), VAR_DECL,
 			get_identifier(sym->get_name().c_str()),
 			type_tree.get_tree());
 
 
 	gcc_assert(!stack_var_decl_chain.empty());
-	stack_var_decl_chain.back().append(decl);
-	sym->set_tree_decl(decl);
+	stack_var_decl_chain.back().append(var_decl);
+	sym->set_tree_decl(var_decl);
 
 
-	Tree stmt = build_tree(DECL_EXPR, identifier->get_locus(), void_type_node, decl);
-	return stmt;
-  
+	TreeStmtList stmt_list;	
+	Tree variable_decl_stmt = build_tree(DECL_EXPR, identifier->get_locus(), void_type_node, var_decl);
+	stmt_list.append(variable_decl_stmt);
+
+
+
+	if (lexer.peek_token()->get_id() == Tiny::ASSIG)
+	{
+
+		const_TokenPtr assig_tok = expect_token(Tiny::ASSIG);
+		if (assig_tok == NULL)
+		{
+			skip_after_semicolon();
+			return Tree::error();
+		}
+		const_TokenPtr first_of_expr = lexer.peek_token();
+		Tree expr = parse_expression();
+
+
+		if (expr.is_error())
+			return Tree::error();
+
+
+		if (var_decl.get_type() != expr.get_type())
+		{
+
+			error_at(first_of_expr->get_locus(),
+			"cannot assign value of type %s to a variable of type %s",
+			print_type(expr.get_type()),
+			print_type(var_decl.get_type()));
+			return Tree::error();
+
+		}
+		Tree assignment_stmt = build_tree(MODIFY_EXPR, assig_tok->get_locus(), void_type_node, var_decl, expr);
+		stmt_list.append(assignment_stmt);
+
+	}
+	skip_token(Tiny::SEMICOLON);
+	return stmt_list.get_tree();
 
 }
 
@@ -561,17 +597,17 @@ Tree Parser::parse_type_declaration()
 	scope.get_current_mapping().insert(sym);
 
 
-	Tree decl = build_decl(identifier->get_locus(), TYPE_DECL,
+	Tree type_decl = build_decl(identifier->get_locus(), TYPE_DECL,
 			  get_identifier(sym->get_name().c_str()),
 			  type_tree.get_tree());
 
 
 	gcc_assert(!stack_var_decl_chain.empty());
-	stack_var_decl_chain.back().append(decl);
-	sym->set_tree_decl(decl);
+	stack_var_decl_chain.back().append(type_decl);
+	sym->set_tree_decl(type_decl);
 
 
-	Tree stmt = build_tree(DECL_EXPR, identifier->get_locus(), void_type_node, decl);
+	Tree stmt = build_tree(DECL_EXPR, identifier->get_locus(), void_type_node, type_decl);
 	return stmt;
   
 
@@ -1637,7 +1673,7 @@ Parser::BinaryHandler Parser::get_binary_handler(TokenId id)
 	switch (id)
 	{
 		#define BINARY_HANDLER(name, token_id)		\
-		case Tiny::token_id:				\
+		case Tiny::token_id:						\
 		return &Parser::binary_##name;
 		BINARY_HANDLER_LIST
 		#undef BINARY_HANDLER

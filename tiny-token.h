@@ -175,7 +175,7 @@ struct Token
 
 	const std::string & get_str() const
 	{
-    		gcc_assert(str != NULL);
+		gcc_assert(str != NULL);
 		return *str;
 	}
 
