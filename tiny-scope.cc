@@ -1,6 +1,6 @@
 #include "tiny-scope.h"
 
-namespace Tiny
+namespace AAELang
 {
 
 Scope::Scope ()

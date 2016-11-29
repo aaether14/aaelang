@@ -6,7 +6,7 @@
 #include "config.h"
 #include "system.h"
 
-namespace Tiny
+namespace AAELang
 {
 
 void

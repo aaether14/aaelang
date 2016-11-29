@@ -10,7 +10,7 @@
 
 #include <tr1/memory>
 
-namespace Tiny
+namespace AAELang
 {
 
 enum SymbolKind

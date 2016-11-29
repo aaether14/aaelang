@@ -5,7 +5,7 @@
 #include <tr1/memory>
 #include <vector>
 
-namespace Tiny
+namespace AAELang
 {
 
 struct Scope

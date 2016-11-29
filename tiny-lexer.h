@@ -13,7 +13,7 @@
 
 
 
-namespace Tiny
+namespace AAELang
 {
 
 

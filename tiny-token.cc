@@ -2,7 +2,7 @@
 
 
 
-namespace Tiny
+namespace AAELang
 {
 
 
@@ -11,7 +11,7 @@ const char * get_token_description (TokenId tid)
 	switch (tid)
 	{
 		#define TINY_TOKEN(name, descr)				\
-		case name:						\
+		case name:									\
 		return descr;
 		#define TINY_TOKEN_KEYWORD(x, y) TINY_TOKEN (x, y)
 		TINY_TOKEN_LIST
@@ -30,7 +30,7 @@ const char * token_id_to_str (TokenId tid)
 	switch (tid)
 	{
 		#define TINY_TOKEN(name, _)                             \
-		case name:                 				\
+		case name:                 								\
 		return #name;
 		#define TINY_TOKEN_KEYWORD(x, y) TINY_TOKEN (x, y)
 		TINY_TOKEN_LIST

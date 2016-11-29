@@ -24,7 +24,7 @@ tree convert(tree type, tree expr)
     return fold_convert(type, expr);
 
 
-  switch (TREE_CODE (type))
+  switch (TREE_CODE(type))
   {
     case VOID_TYPE:
     case BOOLEAN_TYPE:

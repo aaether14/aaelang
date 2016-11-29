@@ -39,24 +39,25 @@
 GCCTINY_INSTALL_NAME := $(shell echo gcctiny|sed '$(program_transform_name)')
 GCCTINY_TARGET_INSTALL_NAME := $(target_noncanonical)-$(shell echo gcctiny|sed '$(program_transform_name)')
 
-tiny: tiny1$(exeext)
 
+tiny: tiny1$(exeext)
 .PHONY: tiny
 
-# Driver
 
+#Driver
 GCCTINY_OBJS = \
    $(GCC_OBJS) \
    tiny/tinyspec.o \
    $(END)
+
 
 gcctiny$(exeext): $(GCCTINY_OBJS) $(EXTRA_GCC_OBJS) libcommon-target.a $(LIBDEPS)
 	+$(LINKER) $(ALL_LINKERFLAGS) $(LDFLAGS) -o $@ \
 	  $(GCCTINY_OBJS) $(EXTRA_GCC_OBJS) libcommon-target.a \
 	  $(EXTRA_GCC_LIBS) $(LIBS)
 
-# The compiler proper
 
+# The frontend sources
 tiny_OBJS = \
     tiny/tiny1.o \
     tiny/tiny-parser.o \
@@ -66,20 +67,21 @@ tiny_OBJS = \
     tiny/tiny-symbol-mapping.o \
     tiny/tiny-scope.o \
     tiny/tiny-convert.o \
+    tiny/aae_scope_manager.o \
     $(END)
 
 tiny1$(exeext): attribs.o $(tiny_OBJS) $(BACKEND) $(LIBDEPS)
 	+$(LLINKER) $(ALL_LINKERFLAGS) $(LDFLAGS) -o $@ \
 	      attribs.o $(tiny_OBJS) $(BACKEND) $(LIBS) $(BACKENDLIBS)
 
-# FIXME
+
+
 tiny.all.cross:
 
 tiny.start.encap: gcctiny$(exeext)
 
 tiny.rest.encap:
 
-# FIXME
 tiny.install-common: installdirs
 	-rm -f $(DESTDIR)$(bindir)/$(GCCTINY_INSTALL_NAME)$(exeext)
 	$(INSTALL_PROGRAM) gcctiny$(exeext) $(DESTDIR)$(bindir)/$(GCCTINY_INSTALL_NAME)$(exeext)
@@ -119,7 +121,6 @@ tiny.distclean:
 
 tiny.maintainer-clean:
 
-# The main makefile has already created stage?/tiny.
 tiny.stage1: stage1-start
 	-mv tiny/*$(objext) stage1/tiny
 tiny.stage2: stage2-start

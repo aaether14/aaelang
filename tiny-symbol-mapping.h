@@ -5,7 +5,7 @@
 #include <tr1/memory>
 #include <map>
 
-namespace Tiny
+namespace AAELang
 {
 
 struct SymbolMapping

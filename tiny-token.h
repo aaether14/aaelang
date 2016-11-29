@@ -2,17 +2,17 @@
 #define TINY_TOKEN_H
 
 
+
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
 #include "input.h"
-
-
 #include <string>
 #include <tr1/memory>
 
 
-namespace Tiny
+
+namespace AAELang
 {
 
 
@@ -186,7 +186,7 @@ struct Token
 	*/
   	const char * get_token_description() const
 	{
-		return Tiny::get_token_description(token_id);
+		return AAELang::get_token_description(token_id);
 	}
 
   	/**
@@ -194,7 +194,7 @@ struct Token
 	*/
   	const char * token_id_to_str() const
 	{
-		return Tiny::token_id_to_str(token_id);
+		return AAELang::token_id_to_str(token_id);
 	}
 
 

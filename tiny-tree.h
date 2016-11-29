@@ -10,7 +10,7 @@
 #include "input.h"
 
 
-namespace Tiny
+namespace AAELang
 {
 
 
