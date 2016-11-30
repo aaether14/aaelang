@@ -68,6 +68,7 @@ tiny_OBJS = \
     tiny/tiny-scope.o \
     tiny/tiny-convert.o \
     tiny/aae_scope_manager.o \
+    tiny/aae_error_manager.o \
     $(END)
 
 tiny1$(exeext): attribs.o $(tiny_OBJS) $(BACKEND) $(LIBDEPS)

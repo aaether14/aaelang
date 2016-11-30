@@ -3,21 +3,15 @@
 #include <memory>
 
 
+
 #include "tiny/tiny-parser.h"
 #include "tiny/tiny-lexer.h"
-#include "tiny/tiny-symbol.h"
-#include "tiny/tiny-symbol-mapping.h"
 #include "aae_scope_manager.h"
+#include "aae_error_manager.h"
 
 
-#include "config.h"
-#include "system.h"
-#include "coretypes.h"
+
 #include "target.h"
-#include "tree.h"
-#include "tree-iterator.h"
-#include "input.h"
-#include "diagnostic.h"
 #include "stringpool.h"
 #include "cgraph.h"
 #include "gimplify.h"
@@ -26,6 +20,7 @@
 #include "print-tree.h"
 #include "stor-layout.h"
 #include "fold-const.h"
+
 
 
 namespace AAELang
@@ -40,18 +35,16 @@ class Parser
 	/** 
 	*Panic mode recovery
 	*/
-	void skip_after_semicolon();
-	void skip_after_end();
-	void skip_after_brace();
+	void SkipAfterToken(AAELang::TokenId);
 
 
 
 	/**
 	*Token handling 
 	*/
-	bool skip_token(TokenId);
-	const_TokenPtr expect_token(TokenId);
-	void unexpected_token(const_TokenPtr);
+	bool SkipToken(AAELang::TokenId);
+	const_TokenPtr ExpectToken(AAELang::TokenId);
+	void UnexpectedToken(const_TokenPtr);
 
 
 
@@ -79,15 +72,8 @@ class Parser
 
 
 
-	SymbolPtr query_type(const std::string &name, location_t loc);
-	SymbolPtr query_variable(const std::string &name, location_t loc);
-	SymbolPtr query_integer_variable(const std::string &name, location_t loc);
-
-
-
-	void parse_statement_seq(bool (Parser::*done)());
+	void parse_statement_sequence(bool (Parser::*done)());
 	void parse_statement_or_block();
-	bool done_end();
 	bool done_brace();
 	bool done_end_of_file();
 
@@ -145,8 +131,9 @@ class Parser
 
 
 
-	Lexer &lexer;
+	Lexer &m_lexer;
 	ScopeManager m_scope_manager;
+	ErrorManager m_error_manager;
 
 
   	tree main_fndecl;
@@ -162,7 +149,7 @@ class Parser
 
 
 	public:
-  	Parser (Lexer &lexer_) : lexer(lexer_), puts_fn(), printf_fn(), scanf_fn() {}
+  	Parser (Lexer &lexer) : m_lexer(lexer) {}
 	void parse_program();
 
 
@@ -171,67 +158,38 @@ class Parser
 
 
 
-void Parser::skip_after_semicolon()
+void Parser::SkipAfterToken(AAELang::TokenId token_id)
 {
 
-	const_TokenPtr t = lexer.peek_token();
-	while (t->get_id() != AAELang::END_OF_FILE && t->get_id() != AAELang::SEMICOLON)
+	const_TokenPtr token = m_lexer.peek_token();
+	while (token->get_id() != AAELang::END_OF_FILE && token->get_id() != token_id)
 	{
-		lexer.skip_token();
-		t = lexer.peek_token();
+		m_lexer.skip_token();
+		token = m_lexer.peek_token();
 	}
 
-	if (t->get_id() == AAELang::SEMICOLON)
-		lexer.skip_token();
+	if (token->get_id() == token_id)
+		m_lexer.skip_token();
 
 }
 
 
-void Parser::skip_after_end()
+
+
+
+const_TokenPtr Parser::ExpectToken(AAELang::TokenId token_id)
 {
 
-	const_TokenPtr t = lexer.peek_token();
-	while (t->get_id() != AAELang::END_OF_FILE && t->get_id() != AAELang::END)
+	const_TokenPtr token = m_lexer.peek_token();
+	if (token->get_id() == token_id)
 	{
-		lexer.skip_token();
-		t = lexer.peek_token();
-	}
-
-	if (t->get_id () == AAELang::END)
-		lexer.skip_token();
-
-}
-
-
-void Parser::skip_after_brace()
-{
-	
-	const_TokenPtr t = lexer.peek_token();
-	while (t->get_id() != AAELang::END_OF_FILE && t->get_id() != AAELang::RIGHT_BRACE)
-	{
-		lexer.skip_token();
-		t = lexer.peek_token();
-	}
-
-	if (t->get_id() == AAELang::RIGHT_BRACE)
-		lexer.skip_token();
-
-}
-
-
-const_TokenPtr Parser::expect_token(AAELang::TokenId token_id)
-{
-
-	const_TokenPtr t = lexer.peek_token ();
-	if (t->get_id () == token_id)
-	{
-		lexer.skip_token ();
-		return t;
+		m_lexer.skip_token();
+		return token;
 	}
 	else
 	{
-		error_at(t->get_locus(), "expecting %s but %s found\n",
-		get_token_description(token_id), t->get_token_description());
+		error_at(token->get_locus(), "expecting %s but %s found\n",
+		get_token_description(token_id), token->get_token_description());
 		return const_TokenPtr();
 	}
 
@@ -239,17 +197,17 @@ const_TokenPtr Parser::expect_token(AAELang::TokenId token_id)
 
 
 
-bool Parser::skip_token(AAELang::TokenId token_id)
+bool Parser::SkipToken(AAELang::TokenId token_id)
 {
-	return expect_token(token_id) != const_TokenPtr();
+	return ExpectToken(token_id) != const_TokenPtr();
 }
 
 
 
 
-void Parser::unexpected_token(const_TokenPtr t)
+void Parser::UnexpectedToken(const_TokenPtr token)
 {
-	error_at(t->get_locus(), "unexpected %s\n", t->get_token_description());
+	error_at(token->get_locus(), "unexpected %s\n", token->get_token_description());
 }
 
 
@@ -267,19 +225,19 @@ void Parser::parse_program()
 	tree return_stmt = build1(RETURN_EXPR, void_type_node, set_return_value);
 
 
-	m_scope_manager.enter_scope();
-	parse_statement_seq(&Parser::done_end_of_file);
+	m_scope_manager.NewScope();
+	parse_statement_sequence(&Parser::done_end_of_file);
 	m_scope_manager.GetScopeStatementList().append(return_stmt);
-	ScopeManager::TreeSymbolMapping main_tree_scope = m_scope_manager.leave_scope();
-	Tree main_block = main_tree_scope.block;
+	ScopeManager::ScopeTree main_scope_tree = m_scope_manager.GetAndPopCurrentScope();
+	Tree main_block = main_scope_tree.block;
 
 
 	BLOCK_SUPERCONTEXT(main_block.get_tree()) = main_fndecl;
 	DECL_INITIAL(main_fndecl) = main_block.get_tree();
-	DECL_SAVED_TREE(main_fndecl) = main_tree_scope.bind_expr.get_tree();
+	DECL_SAVED_TREE(main_fndecl) = main_scope_tree.bind_expression.get_tree();
 
 
-  	DECL_EXTERNAL(main_fndecl) = 0;
+ 	DECL_EXTERNAL(main_fndecl) = 0;
   	DECL_PRESERVE_P(main_fndecl) = 1;
 
 
@@ -292,34 +250,27 @@ void Parser::parse_program()
 
 bool Parser::done_end_of_file()
 {
-	const_TokenPtr t = lexer.peek_token();
-	return (t->get_id() == AAELang::END_OF_FILE);
+	const_TokenPtr token = m_lexer.peek_token();
+	return (token->get_id() == AAELang::END_OF_FILE);
 }
 
-
-
-bool Parser::done_end()
-{
-	const_TokenPtr t = lexer.peek_token();
-	return (t->get_id() == AAELang::END || t->get_id() == AAELang::END_OF_FILE);
-}
 
 
 bool Parser::done_brace()
 {
-	const_TokenPtr t = lexer.peek_token();
-	return (t->get_id() == AAELang::RIGHT_BRACE || t->get_id() == AAELang::END_OF_FILE);
+	const_TokenPtr token = m_lexer.peek_token();
+	return (token->get_id() == AAELang::END_OF_FILE || token->get_id() == AAELang::RIGHT_BRACE);
 }
 
 
 
-void Parser::parse_statement_seq(bool (Parser::*done)())
+void Parser::parse_statement_sequence(bool (Parser::*done)())
 {
 
 	while (!(this->*done) ())
 	{
-		Tree stmt = parse_statement();
-		m_scope_manager.GetScopeStatementList().append(stmt);
+		Tree statement = parse_statement();
+		m_scope_manager.GetScopeStatementList().append(statement);
 	}
 
 }
@@ -329,7 +280,7 @@ void Parser::parse_statement_seq(bool (Parser::*done)())
 Tree Parser::parse_statement()
 {
   
-	const_TokenPtr token = lexer.peek_token();
+	const_TokenPtr token = m_lexer.peek_token();
 	switch (token->get_id())
 	{
 		case AAELang::VAR:
@@ -349,8 +300,8 @@ Tree Parser::parse_statement()
 		case AAELang::IDENTIFIER:
 			return parse_assignment_statement();
 		default:
-			unexpected_token(token);
-			skip_after_semicolon();
+			UnexpectedToken(token);
+			SkipAfterToken(AAELang::SEMICOLON);
 			return Tree::error();
 	}
   	gcc_unreachable();
@@ -362,11 +313,11 @@ Tree Parser::parse_statement()
 void Parser::parse_statement_or_block()
 {
 
-	if (lexer.peek_token()->get_id() == AAELang::LEFT_BRACE)
+	if (m_lexer.peek_token()->get_id() == AAELang::LEFT_BRACE)
 	{
-		skip_token(LEFT_BRACE);
-		parse_statement_seq(&Parser::done_brace);
-		skip_token(RIGHT_BRACE);
+		SkipToken(LEFT_BRACE);
+		parse_statement_sequence(&Parser::done_brace);
+		SkipToken(RIGHT_BRACE);
 	}
 	else
 	{
@@ -381,24 +332,24 @@ Tree Parser::parse_variable_declaration()
 {
 
 
-	if (!skip_token(AAELang::VAR))
+	if (!SkipToken(AAELang::VAR))
 	{
-		skip_after_semicolon();
+		SkipAfterToken(AAELang::SEMICOLON);
 		return Tree::error();
 	}
 
 
-	const_TokenPtr identifier = expect_token(AAELang::IDENTIFIER);
-	if (identifier == NULL)
+	const_TokenPtr identifier = ExpectToken(AAELang::IDENTIFIER);
+	if (!identifier)
 	{
-		skip_after_semicolon();
+		SkipAfterToken(AAELang::SEMICOLON);
 		return Tree::error();
 	}
 
 
-	if (!skip_token(AAELang::COLON))
+	if (!SkipToken(AAELang::COLON))
 	{
-		skip_after_semicolon();
+		SkipAfterToken(AAELang::SEMICOLON);
 		return Tree::error();
 	}
 
@@ -406,23 +357,22 @@ Tree Parser::parse_variable_declaration()
 	Tree type_tree = parse_type();
 	if (type_tree.is_error())
 	{
-		skip_after_semicolon();
+		SkipAfterToken(AAELang::SEMICOLON);
 		return Tree::error();
 	}
 
 
-	if (m_scope_manager.GetScope().get_current_mapping().get(identifier->get_str()))
+	if (m_scope_manager.IsSymbolInCurrentScope(identifier->get_str()))
 	{
-		error_at(identifier->get_locus(),
-				"name '%s' already declared in this scope",
-				identifier->get_str().c_str());
-		skip_after_semicolon();
+		SetCompileError(AAELang::symbol_already_in_this_scope);
+		m_error_manager.IssueError(identifier->get_locus(), identifier->get_str().c_str());
+		SkipAfterToken(AAELang::SEMICOLON);
 		return Tree::error();
 	}
 
 
 	SymbolPtr symbol(new Symbol(AAELang::VARIABLE, identifier->get_str()));
-	m_scope_manager.GetScope().get_current_mapping().insert(symbol);
+	m_scope_manager.InsertSymbolIntoCurrentScope(symbol);
 
 
 	Tree variable_declaration = build_decl(identifier->get_locus(), VAR_DECL,
@@ -441,22 +391,17 @@ Tree Parser::parse_variable_declaration()
 
 
 
-	if (lexer.peek_token()->get_id() == AAELang::ASSIG)
+	if (m_lexer.peek_token()->get_id() == AAELang::ASSIG)
 	{
 
-		const_TokenPtr assig_token = expect_token(AAELang::ASSIG);
-		if (assig_token == NULL)
-		{
-			skip_after_semicolon();
-			return Tree::error();
-		}
-		const_TokenPtr first_of_expression = lexer.peek_token();
+		const_TokenPtr assig_token = ExpectToken(AAELang::ASSIG);
+		const_TokenPtr first_of_expression = m_lexer.peek_token();
 		Tree expression = parse_expression();
 
 
 		if (expression.is_error())
 		{
-			skip_after_semicolon();
+			SkipAfterToken(AAELang::SEMICOLON);
 			return Tree::error();
 		}
 
@@ -471,7 +416,7 @@ Tree Parser::parse_variable_declaration()
 		statement_list.append(assignment_statement);
 
 	}
-	skip_token(AAELang::SEMICOLON);
+	SkipToken(AAELang::SEMICOLON);
 	return statement_list.get_tree();
 
 }
@@ -485,29 +430,29 @@ Tree Parser::parse_assignment_statement()
 	Tree variable = parse_expression_naming_variable();
 	if (variable.is_error())
 	{
-		skip_after_semicolon();
+		SkipAfterToken(AAELang::SEMICOLON);
 		return Tree::error();
 	}
 
 
-	const_TokenPtr assig_token = expect_token(AAELang::ASSIG);
-	if (assig_token == NULL)
+	const_TokenPtr assig_token = ExpectToken(AAELang::ASSIG);
+	if (!assig_token)
 	{
-		skip_after_semicolon();
+		SkipAfterToken(AAELang::SEMICOLON);
 		return Tree::error();
 	}
 
 
-	const_TokenPtr first_of_expression = lexer.peek_token();
+	const_TokenPtr first_of_expression = m_lexer.peek_token();
 	Tree expression = parse_expression();
 	if (expression.is_error())
 	{
-		skip_after_semicolon();
+		SkipAfterToken(AAELang::SEMICOLON);
 		return Tree::error();
 	}
 
 
-	skip_token(AAELang::SEMICOLON);
+	SkipToken(AAELang::SEMICOLON);
 	/**
 	*Convert expression to the type of the variable
 	*/
@@ -526,24 +471,24 @@ Tree Parser::parse_type_declaration()
 {
 
 
-	if (!skip_token(AAELang::TYPE))
+	if (!SkipToken(AAELang::TYPE))
 	{
-		skip_after_semicolon();
+		SkipAfterToken(AAELang::SEMICOLON);
 		return Tree::error();
 	}
 
 
-	const_TokenPtr identifier = expect_token(AAELang::IDENTIFIER);
-	if (identifier == NULL)
+	const_TokenPtr identifier = ExpectToken(AAELang::IDENTIFIER);
+	if (!identifier)
 	{
-		skip_after_semicolon();
+		SkipAfterToken(AAELang::SEMICOLON);
 		return Tree::error();
 	}
 
 
-	if (!skip_token(AAELang::COLON))
+	if (!SkipToken(AAELang::COLON))
 	{
-		skip_after_semicolon();
+		SkipAfterToken(AAELang::SEMICOLON);
 		return Tree::error();
 	}
 
@@ -551,24 +496,23 @@ Tree Parser::parse_type_declaration()
 	Tree type_tree = parse_type();
 	if (type_tree.is_error())
 	{
-		skip_after_semicolon();
+		SkipAfterToken(AAELang::SEMICOLON);
 		return Tree::error();
 	}
 
 
-	skip_token(AAELang::SEMICOLON);
-	if (m_scope_manager.GetScope().get_current_mapping().get(identifier->get_str()))
+	SkipToken(AAELang::SEMICOLON);
+	if (m_scope_manager.IsSymbolInCurrentScope(identifier->get_str()))
 	{
-		error_at(identifier->get_locus(),
-				"name '%s' already declared in this scope",
-				identifier->get_str().c_str());
-		skip_after_semicolon();
+		SetCompileError(AAELang::symbol_already_in_this_scope);
+		m_error_manager.IssueError(identifier->get_locus(), identifier->get_str().c_str());
+		SkipAfterToken(AAELang::SEMICOLON);
 		return Tree::error();
 	}
 
 
 	SymbolPtr symbol(new Symbol(AAELang::TYPENAME, identifier->get_str()));
-	m_scope_manager.GetScope().get_current_mapping().insert(symbol);
+	m_scope_manager.InsertSymbolIntoCurrentScope(symbol);
 
 
 	Tree type_declaration = build_decl(identifier->get_locus(), TYPE_DECL,
@@ -646,17 +590,17 @@ const char * Parser::print_type(Tree type)
 Tree Parser::parse_field_declaration(std::vector<std::string> &field_names)
 {
   
-	const_TokenPtr identifier = expect_token(AAELang::IDENTIFIER);
+	const_TokenPtr identifier = ExpectToken(AAELang::IDENTIFIER);
 	if (identifier == NULL)
 	{
-		skip_after_semicolon();
+		SkipAfterToken(AAELang::SEMICOLON);
 		return Tree::error();
 	}
 
 
-	skip_token(AAELang::COLON);
+	SkipToken(AAELang::COLON);
 	Tree type = parse_type();
-	skip_token(AAELang::SEMICOLON);
+	SkipToken(AAELang::SEMICOLON);
 
 
   	if (type.is_error())
@@ -687,12 +631,13 @@ Tree Parser::parse_record()
 {
   
 
-	const_TokenPtr record_tok = expect_token(AAELang::RECORD);
-	if (record_tok == NULL)
+	const_TokenPtr record_token = ExpectToken(AAELang::RECORD);
+	if (record_token == NULL)
 	{
-		skip_after_semicolon();
+		SkipAfterToken(AAELang::SEMICOLON);
 		return Tree::error();
 	}
+	SkipToken(AAELang::LEFT_BRACE);
 
 
 	Tree record_type = make_node(RECORD_TYPE);
@@ -700,8 +645,8 @@ Tree Parser::parse_record()
 	std::vector<std::string> field_names;
 
 
-	const_TokenPtr next = lexer.peek_token();
-	while (next->get_id() != AAELang::END)
+	const_TokenPtr next = m_lexer.peek_token();
+	while (next->get_id() != AAELang::RIGHT_BRACE)
 	{
 
 		Tree field_decl = parse_field_declaration(field_names);
@@ -714,11 +659,11 @@ Tree Parser::parse_record()
 				TREE_CHAIN(field_last.get_tree()) = field_decl.get_tree();
 			field_last = field_decl;
 		}
-		next = lexer.peek_token();
+		next = m_lexer.peek_token();
 	}
 
 
-	skip_token(AAELang::END);
+	SkipToken(AAELang::RIGHT_BRACE);
 	TYPE_FIELDS(record_type.get_tree()) = field_list.get_tree();
 	layout_type(record_type.get_tree());
 	return record_type;
@@ -731,42 +676,40 @@ Tree Parser::parse_type()
 {
 
 	
-	const_TokenPtr t = lexer.peek_token();
+	const_TokenPtr token = m_lexer.peek_token();
 	Tree type;
 
 	
-	switch (t->get_id())
+	switch (token->get_id())
 	{
 		case AAELang::CHAR:
-			lexer.skip_token();
 			type = signed_char_type_node;
+			m_lexer.skip_token();
 			break;
 		case AAELang::INT:
-			lexer.skip_token();
 			type = integer_type_node;
+			m_lexer.skip_token();
 			break;
 		case AAELang::FLOAT:
-			lexer.skip_token();
 			type = float_type_node;
+			m_lexer.skip_token();
 			break;
 		case AAELang::BOOL:
-			lexer.skip_token();
 			type = boolean_type_node;
+			m_lexer.skip_token();
 			break;
 		case AAELang::IDENTIFIER:
 			{
-				SymbolPtr s = query_type(t->get_str(), t->get_locus());
-				lexer.skip_token();
-				if (s == NULL)
-					type = Tree::error();
-				else
-					type = TREE_TYPE(s->get_tree_decl().get_tree());
+				SymbolPtr symbol = m_scope_manager.GetFirstTypeInScope(token->get_str());
+				m_error_manager.IssueError(token->get_locus(), token->get_str().c_str());
+				type = (!symbol) ? Tree::error() : TREE_TYPE(symbol->get_tree_decl().get_tree());
+				m_lexer.skip_token();
 			} break;
 		case AAELang::RECORD:
 				type = parse_record();
 				break;
 		default:
-				unexpected_token(t);
+				UnexpectedToken(token);
 				return Tree::error();
 				break;
 	}
@@ -776,17 +719,17 @@ Tree Parser::parse_type()
 	Dimensions dimensions;
 
 
-	t = lexer.peek_token();
-	while (t->get_id() == AAELang::LEFT_PAREN || t->get_id() == AAELang::LEFT_SQUARE)
+	token = m_lexer.peek_token();
+	while (token->get_id() == AAELang::LEFT_PAREN || token->get_id() == AAELang::LEFT_SQUARE)
 	{
 
-		lexer.skip_token();
+		m_lexer.skip_token();
 		Tree lower_bound, upper_bound;
-		if (t->get_id() == AAELang::LEFT_SQUARE)
+		if (token->get_id() == AAELang::LEFT_SQUARE)
 		{
 		
 			Tree size = parse_integer_expression();
-			skip_token(AAELang::RIGHT_SQUARE);
+			SkipToken(AAELang::RIGHT_SQUARE);
 
 
 			lower_bound = Tree(build_int_cst_type(integer_type_node, 0), size.get_locus());
@@ -794,18 +737,18 @@ Tree Parser::parse_type()
 					size, build_int_cst(integer_type_node, 1));
 
 		}
-		else if (t->get_id() == AAELang::LEFT_PAREN)
+		else if (token->get_id() == AAELang::LEFT_PAREN)
 		{
 			
 			lower_bound = parse_integer_expression();
-			skip_token(AAELang::COLON);
+			SkipToken(AAELang::COLON);
 			upper_bound = parse_integer_expression();
-			skip_token(AAELang::RIGHT_PAREN);
+			SkipToken(AAELang::RIGHT_PAREN);
 		}
 
 		
 		dimensions.push_back(std::make_pair(lower_bound, upper_bound));
-		t = lexer.peek_token();
+		token = m_lexer.peek_token();
 
     }
 
@@ -822,71 +765,10 @@ Tree Parser::parse_type()
 			type = build_array_type(type.get_tree(), range_type.get_tree());
 		}
 	}
-	
 	return type;
 
 }
 
-
-
-
-SymbolPtr Parser::query_type(const std::string &name, location_t loc)
-{
-
-	SymbolPtr sym = scope.lookup(name);
-  	if (sym == NULL)
-	{
-		error_at(loc, "type '%s' not declared in the current scope", name.c_str());
-	}	
-	else if (sym->get_kind() != AAELang::TYPENAME)
-	{
-		error_at(loc, "name '%s' is not a type", name.c_str());
-		sym = SymbolPtr();
-	}
-	return sym;
-
-}
-
-
-
-SymbolPtr Parser::query_variable(const std::string &name, location_t loc)
-{
-
-	SymbolPtr sym = scope.lookup(name);
-	if (sym == NULL)
-	{
-		error_at(loc, "variable '%s' not declared in the current scope", name.c_str());
-	}
-	else if (sym->get_kind() != AAELang::VARIABLE)
-	{
-		error_at(loc, "name '%s' is not a variable", name.c_str());
-		sym = SymbolPtr();
-	}
-	return sym;
-
-}
-
-
-
-SymbolPtr Parser::query_integer_variable(const std::string &name, location_t loc)
-{
-
-	SymbolPtr sym = query_variable(name, loc);
-	if (sym != NULL)
-	{
-
-		Tree var_decl = sym->get_tree_decl();
-		gcc_assert(!var_decl.is_null());
-
-		if (var_decl.get_type() != integer_type_node)
-		{
-			error_at(loc, "variable '%s' does not have integer type", name.c_str());
-			sym = SymbolPtr();
-		}
-	}
-	return sym;
-
-}
 
 
 
@@ -952,37 +834,33 @@ Tree Parser::parse_if_statement()
 {
 
 
-	if (!skip_token(AAELang::IF))
-	{
-		skip_after_brace();
+	if (!SkipToken(AAELang::IF))
 		return Tree::error();
-	}
 
 
 	
-	Tree expr = parse_boolean_expression();
-	enter_scope();
+	Tree expression = parse_boolean_expression();
+	m_scope_manager.NewScope();
 	parse_statement_or_block();
-	TreeSymbolMapping then_tree_scope = leave_scope();
-	Tree then_stmt = then_tree_scope.bind_expr;
-	Tree else_stmt = Tree();
+	Tree then_statement = m_scope_manager.GetAndPopCurrentScope().bind_expression;
+	Tree else_statement = Tree();
 
 
 
-	if (lexer.peek_token()->get_id() == AAELang::ELSE)
+	if (m_lexer.peek_token()->get_id() == AAELang::ELSE)
 	{
 
 
-		skip_token(AAELang::ELSE);
-		enter_scope();
+		SkipToken(AAELang::ELSE);
+		m_scope_manager.NewScope();
 		parse_statement_or_block();
-		TreeSymbolMapping else_tree_scope = leave_scope();
-		else_stmt = else_tree_scope.bind_expr;
+		else_statement = m_scope_manager.GetAndPopCurrentScope().bind_expression;
 
 
 	}
-	return build_if_statement(expr, then_stmt, else_stmt);
+	return build_if_statement(expression, then_statement, else_statement);
 }
+
 
 
 
@@ -1031,34 +909,30 @@ Tree Parser::parse_while_statement()
 {
 
 
-	if (!skip_token(AAELang::WHILE))
-    {
-    	skip_after_brace();
-    	return Tree::error();
-    }
+	if (!SkipToken(AAELang::WHILE))
+    		return Tree::error();
 
 
-	Tree expr = parse_boolean_expression();
-	enter_scope();
+	Tree expression = parse_boolean_expression();
+	m_scope_manager.NewScope();
 	parse_statement_or_block();
-	TreeSymbolMapping while_body_tree_scope = leave_scope();
-	Tree while_body_stmt = while_body_tree_scope.bind_expr;
+	Tree while_body_statement = m_scope_manager.GetAndPopCurrentScope().bind_expression;
 
 
-	return build_while_statement(expr, while_body_stmt);
+	return build_while_statement(expression, while_body_statement);
 
 }
 
 
 
 
-Tree
-Parser::build_for_statement (SymbolPtr ind_var, Tree lower_bound,
-			     Tree upper_bound, Tree for_body_stmt_list)
+Tree Parser::build_for_statement(SymbolPtr ind_var, Tree lower_bound, Tree upper_bound, Tree for_body_stmt_list)
 {
+
+
   if (ind_var == NULL)
-    return Tree::error ();
-  Tree ind_var_decl = ind_var->get_tree_decl ();
+    return Tree::error();
+  Tree ind_var_decl = ind_var->get_tree_decl();
 
   // Lower
   if (lower_bound.is_error ())
@@ -1101,58 +975,57 @@ Parser::build_for_statement (SymbolPtr ind_var, Tree lower_bound,
   return stmt_list.get_tree ();
 }
 
-Tree
-Parser::parse_for_statement ()
+
+
+
+Tree Parser::parse_for_statement()
 {
-  if (!skip_token (AAELang::FOR))
-    {
-      skip_after_end ();
-      return Tree::error ();
-    }
 
-  const_TokenPtr identifier = expect_token (AAELang::IDENTIFIER);
-  if (identifier == NULL)
-    {
-      skip_after_end ();
-      return Tree::error ();
-    }
 
-  if (!skip_token (AAELang::ASSIG))
-    {
-      skip_after_end ();
-      return Tree::error ();
-    }
+	if (!SkipToken(AAELang::FOR))
+	{
+		SkipAfterToken(AAELang::RIGHT_BRACE);
+		return Tree::error();
+    	}
 
-  Tree lower_bound = parse_integer_expression ();
 
-  if (!skip_token (AAELang::TO))
-    {
-      skip_after_end ();
-      return Tree::error ();
-    }
+	const_TokenPtr identifier = ExpectToken(AAELang::IDENTIFIER);
+	if(identifier == NULL)
+	{
+		SkipAfterToken(AAELang::RIGHT_BRACE);
+		return Tree::error();
+    	}
 
-  Tree upper_bound = parse_integer_expression ();
 
-  if (!skip_token (AAELang::DO))
-    {
-      skip_after_end ();
-      return Tree::error ();
-    }
+	if(!SkipToken(AAELang::ASSIG))
+	{
+		SkipAfterToken(AAELang::RIGHT_BRACE);
+		return Tree::error();
+   	 }
 
-  enter_scope ();
-  parse_statement_seq (&Parser::done_end);
 
-  TreeSymbolMapping for_body_tree_scope = leave_scope ();
-  Tree for_body_stmt = for_body_tree_scope.bind_expr;
+	Tree lower_bound = parse_integer_expression();
+	if (!SkipToken(AAELang::TO))
+   	 {
+    		SkipAfterToken(AAELang::RIGHT_BRACE);
+    		return Tree::error();
+    	}
 
-  skip_token (AAELang::END);
 
-  // Induction var
-  SymbolPtr ind_var
-    = query_integer_variable (identifier->get_str (), identifier->get_locus ());
+	Tree upper_bound = parse_integer_expression();
+   	m_scope_manager.NewScope();
+	parse_statement_or_block();
+    	Tree for_body_statement = m_scope_manager.GetAndPopCurrentScope().bind_expression;
 
-  return build_for_statement (ind_var, lower_bound, upper_bound, for_body_stmt);
+
+	SymbolPtr ind_var = m_scope_manager.GetFirstVariableInScope(identifier->get_str());
+	m_error_manager.IssueError(identifier->get_locus(), identifier->get_str().c_str());
+
+
+	return build_for_statement(ind_var, lower_bound, upper_bound, for_body_statement);
+
 }
+
 
 Tree
 Parser::get_scanf_addr ()
@@ -1181,16 +1054,16 @@ Parser::get_scanf_addr ()
 Tree
 Parser::parse_read_statement ()
 {
-  if (!skip_token (AAELang::READ))
+  if (!SkipToken(AAELang::READ))
     {
-      skip_after_semicolon ();
+      SkipAfterToken(AAELang::SEMICOLON);
       return Tree::error ();
     }
 
-  const_TokenPtr first_of_expr = lexer.peek_token ();
+  const_TokenPtr first_of_expr = m_lexer.peek_token ();
   Tree expr = parse_expression_naming_variable ();
 
-  skip_token (AAELang::SEMICOLON);
+  SkipToken(AAELang::SEMICOLON);
 
   if (expr.is_error ())
     return Tree::error ();
@@ -1283,16 +1156,16 @@ Parser::parse_write_statement ()
 {
   // write_statement -> "write" expression ";"
 
-  if (!skip_token (AAELang::WRITE))
+  if (!SkipToken(AAELang::WRITE))
     {
-      skip_after_semicolon ();
+      SkipAfterToken(AAELang::SEMICOLON);
       return Tree::error ();
     }
 
-  const_TokenPtr first_of_expr = lexer.peek_token ();
+  const_TokenPtr first_of_expr = m_lexer.peek_token ();
   Tree expr = parse_expression ();
 
-  skip_token (AAELang::SEMICOLON);
+  SkipToken(AAELang::SEMICOLON);
 
   if (expr.is_error ())
     return Tree::error ();
@@ -1349,7 +1222,7 @@ Parser::parse_write_statement ()
       return Tree::error ();
     }
 
-  gcc_unreachable ();
+  gcc_unreachable();
 }
 
 
@@ -1358,8 +1231,8 @@ Parser::parse_write_statement ()
 Tree Parser::parse_expression(int right_binding_power)
 {
 
-	const_TokenPtr current_token = lexer.peek_token();
-	lexer.skip_token();
+	const_TokenPtr current_token = m_lexer.peek_token();
+	m_lexer.skip_token();
 	Tree expr = null_denotation(current_token);
 
 
@@ -1367,10 +1240,10 @@ Tree Parser::parse_expression(int right_binding_power)
 		return Tree::error();
 
 
-	while (right_binding_power < left_binding_power(lexer.peek_token()))
+	while (right_binding_power < left_binding_power(m_lexer.peek_token()))
 	{
-		current_token = lexer.peek_token();
-		lexer.skip_token();
+		current_token = m_lexer.peek_token();
+		m_lexer.skip_token();
 
 		expr = left_denotation(current_token, expr);
 		if (expr.is_error())
@@ -1466,10 +1339,9 @@ Tree Parser::null_denotation(const_TokenPtr tok)
 	{
 		case AAELang::IDENTIFIER:
 			{
-				SymbolPtr s = query_variable(tok->get_str(), tok->get_locus());
-				if (s == NULL)
-					return Tree::error();
-				return Tree(s->get_tree_decl(), tok->get_locus());
+				SymbolPtr symbol = m_scope_manager.GetFirstVariableInScope(tok->get_str());
+				m_error_manager.IssueError(tok->get_locus(), tok->get_str().c_str());
+				return (!symbol) ? Tree::error() : Tree(symbol->get_tree_decl(), tok->get_locus());
 			}
 		case AAELang::INTEGER_LITERAL: /** FIXME : check ranges */
 			{
@@ -1498,12 +1370,12 @@ Tree Parser::null_denotation(const_TokenPtr tok)
 		case AAELang::LEFT_PAREN:
 			{
 				Tree expr = parse_expression();
-				tok = lexer.peek_token();
+				tok = m_lexer.peek_token();
 				if (tok->get_id() != AAELang::RIGHT_PAREN)
 					error_at(tok->get_locus(), "expecting ) but %s found\n",
 							tok->get_token_description());
 				else
-					lexer.skip_token();
+					m_lexer.skip_token();
 				return Tree(expr, tok->get_locus());
 			}
 		case AAELang::PLUS:
@@ -1548,7 +1420,7 @@ Tree Parser::null_denotation(const_TokenPtr tok)
 				return expr;
 			}
 		default:
-			unexpected_token(tok);
+			UnexpectedToken(tok);
 			return Tree::error();
 	}
 
@@ -1605,7 +1477,7 @@ Parser::BinaryHandler Parser::get_binary_handler(TokenId id)
 
 	switch (id)
 	{
-		#define BINARY_HANDLER(name, token_id)		\
+		#define BINARY_HANDLER(name, token_id)				\
 		case AAELang::token_id:						\
 		return &Parser::binary_##name;
 		BINARY_HANDLER_LIST
@@ -1853,7 +1725,7 @@ Parser::binary_array_ref (const const_TokenPtr tok, Tree left)
   if (right.is_error ())
     return Tree::error ();
 
-  if (!skip_token (AAELang::RIGHT_SQUARE))
+  if (!SkipToken(AAELang::RIGHT_SQUARE))
     return Tree::error ();
 
   if (!is_array_type (left.get_type ()))
@@ -1870,7 +1742,7 @@ Parser::binary_array_ref (const const_TokenPtr tok, Tree left)
 Tree
 Parser::binary_field_ref (const const_TokenPtr tok, Tree left)
 {
-  const_TokenPtr identifier = expect_token (AAELang::IDENTIFIER);
+  const_TokenPtr identifier = ExpectToken(AAELang::IDENTIFIER);
   if (identifier == NULL)
     {
       return Tree::error ();
@@ -1915,7 +1787,7 @@ Tree Parser::left_denotation(const_TokenPtr tok, Tree left)
 	BinaryHandler binary_handler = get_binary_handler(tok->get_id());
 	if (binary_handler == NULL)
 	{
-		unexpected_token(tok);
+		UnexpectedToken(tok);
 		return Tree::error();
 	}
 	return (this->*binary_handler)(tok, left);
@@ -1958,9 +1830,9 @@ Tree Parser::parse_integer_expression()
 
 	if (expr.get_type() != integer_type_node)
 	{
-		error_at (expr.get_locus(),
-		"expected expression of integer type but its type is %s",
-		print_type(expr.get_type()));
+		error_at(expr.get_locus(),
+			"expected expression of integer type but its type is %s",
+			print_type(expr.get_type()));
 		return Tree::error ();
 	}
 	return expr;
@@ -2003,8 +1875,8 @@ static void tiny_parse_file(const char *filename)
 		fatal_error(UNKNOWN_LOCATION, "cannot open filename %s: %m", filename);
 
 
-	AAELang::Lexer lexer(filename, file);
-	AAELang::Parser parser(lexer);
+	AAELang::Lexer m_lexer(filename, file);
+	AAELang::Parser parser(m_lexer);
 
 
 	parser.parse_program();

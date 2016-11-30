@@ -42,21 +42,20 @@ namespace AAELang
   TINY_TOKEN (STRING_LITERAL, "string literal")                                \
   TINY_TOKEN (LEFT_SQUARE, "[")                                                \
   TINY_TOKEN (RIGHT_SQUARE, "]")                                               \
-  TINY_TOKEN (LEFT_BRACE, "{")						       					   \
-  TINY_TOKEN (RIGHT_BRACE, "}")						       					   \
+  TINY_TOKEN (LEFT_BRACE, "{")						       \
+  TINY_TOKEN (RIGHT_BRACE, "}")						       \
   TINY_TOKEN (DOT, ".")                                                        \
-                                                                               \
+  									       \
   TINY_TOKEN_KEYWORD (AND, "and")                                              \
   TINY_TOKEN_KEYWORD (BOOL, "bool")                                            \
-  TINY_TOKEN_KEYWORD (CHAR, "char")											   \
+  TINY_TOKEN_KEYWORD (CHAR, "char")					       \
   TINY_TOKEN_KEYWORD (DO, "do")                                                \
   TINY_TOKEN_KEYWORD (ELSE, "else")                                            \
-  TINY_TOKEN_KEYWORD (END, "end")                                              \
   TINY_TOKEN_KEYWORD (FALSE_LITERAL, "false")                                  \
   TINY_TOKEN_KEYWORD (FLOAT, "float")                                          \
   TINY_TOKEN_KEYWORD (FOR, "for")                                              \
   TINY_TOKEN_KEYWORD (IF, "if")                                                \
-  TINY_TOKEN_KEYWORD (IMPORT, "import")										   \
+  TINY_TOKEN_KEYWORD (IMPORT, "import")					       \
   TINY_TOKEN_KEYWORD (INT, "int")                                              \
   TINY_TOKEN_KEYWORD (NOT, "not")                                              \
   TINY_TOKEN_KEYWORD (OR, "or")                                                \
@@ -68,7 +67,7 @@ namespace AAELang
   TINY_TOKEN_KEYWORD (VAR, "var")                                              \
   TINY_TOKEN_KEYWORD (WHILE, "while")                                          \
   TINY_TOKEN_KEYWORD (WRITE, "write")                                          \
-                                                                               \
+  									       \
   TINY_TOKEN (LAST_TOKEN, "<last-token-marker>")
 
 
